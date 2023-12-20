@@ -5,6 +5,10 @@ inputs:
     description: 'Who to greet'
     required: true
     default: 'World'
+  platforms:
+    description: 'dict of clang triples to values'
+    required: true
+    default: {}
 outputs:
   random-number:
     description: "Random number"
@@ -12,7 +16,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - run: echo Hello ${{ inputs.who-to-greet }}.
+    - run: echo Hello ${{ inputs.platforms.linux-x86_64.propA }}.
       shell: bash
     - id: random-number-generator
       run: echo "random-number=$(echo $RANDOM)" >> $GITHUB_OUTPUT

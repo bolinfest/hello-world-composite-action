@@ -34,6 +34,8 @@ def get_config(path_to_config: str):
         "-X",
         "GET",
         f"{api_url}/repos/{repository}/contents/{path_to_config}",
+        "-H",
+        "Accept: application/vnd.github.raw",
         "-f",
         f"ref={ref}",
     ]

@@ -21,6 +21,8 @@ def main():
         if "GITHUB" in key:
             print(f"{key}: {value}")
 
+    get_config(args.config)
+
 
 def get_config(path_to_config: str):
     api_url = os.getenv("GITHUB_API_URL")

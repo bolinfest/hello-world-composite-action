@@ -9,9 +9,15 @@ def main():
     print(f"config: {args.config}")
 
     import os
-    token = os.getenv('GITHUB_TOKEN')
+
+    token = os.getenv("GITHUB_TOKEN")
     is_token_none = token is None or len(token) == 0
     print(f"is_token_none: {is_token_none}")
+
+    env_vars = os.environ
+    for key, value in env_vars.items():
+        if "GITHUB" in key:
+            print(f"{key}: {value}")
 
 
 def parse_args():

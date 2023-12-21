@@ -11,16 +11,18 @@ def main():
     print(f"branch: {args.branch}")
     print(f"config: {args.config}")
 
-    token = os.getenv("GITHUB_TOKEN")
-    is_token_none = token is None or len(token) == 0
-    print(f"is_token_none: {is_token_none}")
-
     env_vars = os.environ
     for key, value in env_vars.items():
         if "GITHUB" in key:
             print(f"{key}: {value}")
 
-    get_config(args.config)
+    config = get_config(args.config)
+    # TODO: read values in platforms
+    # see if the corresponding artifacts have been uploaded in the release that
+    # corresponds to `branch`.`
+    # Use gh to check release info. Example:
+    # gh release view 0.2.20231113-145254+995db0d6 --repo facebook/sapling --json assets
+    print(json.dumps(config, indent=2))
 
 
 def get_config(path_to_config: str):
@@ -40,8 +42,7 @@ def get_config(path_to_config: str):
         f"ref={ref}",
     ]
     output = subprocess.check_output(args)
-    config = json.loads(output.decode("utf-8"))
-    print(json.dumps(config, indent=2))
+    return json.loads(output.decode("utf-8"))
 
 
 def parse_args():

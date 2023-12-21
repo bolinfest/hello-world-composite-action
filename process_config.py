@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
+import subprocess
 
 
 def main():
@@ -18,6 +20,25 @@ def main():
     for key, value in env_vars.items():
         if "GITHUB" in key:
             print(f"{key}: {value}")
+
+
+def get_config(path_to_config: str):
+    api_url = os.getenv("GITHUB_API_URL")
+    repository = os.getenv("GITHUB_REPOSITORY")
+    ref = os.getenv("GITHUB_SHA")
+
+    args = [
+        "gh",
+        "api",
+        "-X",
+        "GET",
+        f"{api_url}/repos/{repository}/contents/{path_to_config}",
+        "-f",
+        f"ref={ref}",
+    ]
+    output = subprocess.check_output(args)
+    config = json.loads(output.decode("utf-8"))
+    print(json.dumps(config, indent=2))
 
 
 def parse_args():

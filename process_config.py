@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import subprocess
 
 
@@ -9,8 +10,6 @@ def main():
     args = parse_args()
     print(f"branch: {args.branch}")
     print(f"config: {args.config}")
-
-    import os
 
     token = os.getenv("GITHUB_TOKEN")
     is_token_none = token is None or len(token) == 0

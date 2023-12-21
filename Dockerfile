@@ -8,7 +8,7 @@ ENV TZ=Etc/UTC
 # Update and install some basic packages to register a PPA.
 RUN apt-get -y update
 
-RUN apt-get -y install python3.10
+RUN apt-get -y install python3
 
 COPY process_config.py /process_config.py
 

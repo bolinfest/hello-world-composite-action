@@ -1,5 +1,8 @@
 FROM ubuntu:22.04
 
+# Consider?
+# FROM python:3.12-slim
+
 # https://serverfault.com/a/1016972 to ensure installing tzdata does not
 # result in a prompt that hangs forever.
 ARG DEBIAN_FRONTEND=noninteractive

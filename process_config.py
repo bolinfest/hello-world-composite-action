@@ -8,6 +8,11 @@ def main():
     print(f"branch: {args.branch}")
     print(f"config: {args.config}")
 
+    import os
+    token = os.getenv('GITHUB_TOKEN')
+    is_token_none = token is None or len(token) == 0
+    print(f"is_token_none: {is_token_none}")
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="A simple argparse example")

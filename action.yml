@@ -7,6 +7,13 @@ inputs:
   branch:
     description: 'branch that triggered the workflow run'
     required: true
+  github_token:
+    description: 'auth token for gh CLI'
+    required: true
+
+  # Should output one or more files to /github/workspace or $GITHUB_WORKSPACE
+  # See https://docs.github.com/en/actions/creating-actions/creating-a-docker-container-action#accessing-files-created-by-a-container-action
+
 # outputs:
 #   random-number:
 #     description: "Random number"
@@ -14,6 +21,8 @@ inputs:
 runs:
   using: 'docker'
   image: 'Dockerfile'
+  env:
+    GITHUB_TOKEN: ${{ inputs.github_token }}
   args:
     - '--config'
     - ${{ inputs.path-to-config }}

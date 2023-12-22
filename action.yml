@@ -4,8 +4,8 @@ inputs:
   path-to-config:
     description: 'path to .json file in the repo'
     required: true
-  branch:
-    description: 'branch that triggered the workflow run'
+  tag:
+    description: 'tag identifying the release whose assets should be used'
     required: true
 
 # Should output one or more files to /github/workspace or $GITHUB_WORKSPACE
@@ -21,5 +21,5 @@ runs:
   args:
     - '--config'
     - ${{ inputs.path-to-config }}
-    - '--branch'
-    - ${{ inputs.branch }}
+    - '--tag'
+    - ${{ inputs.tag }}

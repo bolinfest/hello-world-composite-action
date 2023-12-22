@@ -8,12 +8,14 @@ import re
 import subprocess
 import sys
 import tempfile
+
+from functools import cache
 from typing import Any, Dict, Literal, Tuple, Union
 
 
 github_repository = os.getenv("GITHUB_REPOSITORY")
 github_server_url = os.getenv("GITHUB_SERVER_URL")
-gh_repo_arg = f"{github_repository}/{github_server_url}"
+gh_repo_arg = f"{github_server_url}/{github_repository}"
 
 
 def main() -> None:
@@ -42,9 +44,8 @@ def _main() -> int:
         return 1
 
     logging.info(json.dumps(platform_entries, indent=2))
-    platforms = {}
 
-    computed_artifacts = {}
+    platforms = {}
     with tempfile.TemporaryDirectory() as temp_dir:
         for platform_name, platform_entry in platform_entries.items():
             asset, platform_config = platform_entry
@@ -59,16 +60,13 @@ def _main() -> int:
                 logging.error(f"missing 'name' field in asset: {asset}")
                 return 1
 
-            artifact_key = (tag, name, hash_algo, size)
-            hash_hex = computed_artifacts.get(artifact_key)
-            if hash_hex is None:
-                hash_hex = compute_hash(temp_dir, **artifact_key)
+            hash_hex = compute_hash(temp_dir, tag, name, hash_algo, size)
             platform_fetch_info = {
                 "url": asset["url"],
                 "digest": {"type": hash_algo, "value": hash_hex},
                 "size": size,
             }
-            path = platform_entry.get("path")
+            path = platform_config.get("path")
             if path:
                 platform_fetch_info["path"] = path
             platforms[platform_name] = platform_fetch_info
@@ -90,7 +88,7 @@ def _main() -> int:
 
 def map_platforms(
     config, name_to_asset: Dict[str, Any]
-) -> Union[Dict[str, Any], Literal["NoMatchForAsset", "ParseError"]]:
+) -> Union[Dict[str, Tuple[Any, Any]], Literal["NoMatchForAsset", "ParseError"]]:
     """Attempts to take every platform specified in the config and return a map
     of platform names to their corresponding asset information. If successful,
     each value in the dict will be a tuple of (asset, platform_config).
@@ -140,8 +138,9 @@ def map_platforms(
     return platform_entries
 
 
+@cache
 def compute_hash(
-    temp_dir: tempfile.TemporaryDirectory,
+    temp_dir: str,
     tag: str,
     name: str,
     hash_algo: Literal["blake3", "sha1", "sha256"],
@@ -152,7 +151,8 @@ def compute_hash(
 
     Return value is a hex string representing the hash.
     """
-    output_filename = os.path.join(temp_dir.name, name)
+    output_filename = os.path.join(temp_dir, name)
+
     # Fetch the url using the gh CLI to ensure authentication is handled correctly.
     args = [
         "gh",
@@ -161,8 +161,11 @@ def compute_hash(
         tag,
         "--repo",
         gh_repo_arg,
+        # --pattern takes a "glob pattern", though we want to match an exact
+        # filename. Using re.escape() seems to do the right thing, though adding
+        # ^ and $ appears to break things.
         "--pattern",
-        "^" + re.escape(name) + "$",
+        re.escape(name),
         "--output",
         output_filename,
     ]
@@ -172,10 +175,10 @@ def compute_hash(
         raise Exception(f"expected size {size} for {name} but got {stats.st_size}")
 
     if hash_algo == "blake3":
-        from blake3 import blake3
+        import blake3
 
         hasher = blake3.blake3()
-        with open(file_path, "rb") as f:
+        with open(output_filename, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hasher.update(chunk)
         digest = hasher.digest()

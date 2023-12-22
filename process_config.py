@@ -56,7 +56,7 @@ def _main() -> int:
     return 0
 
 
-def generate_manifest_file(tag: str, platform_entries) -> None:
+def generate_manifest_file(tag: str, platform_entries) -> str:
     platforms = {}
     with tempfile.TemporaryDirectory() as temp_dir:
         for platform_name, platform_entry in platform_entries.items():
@@ -87,7 +87,7 @@ def generate_manifest_file(tag: str, platform_entries) -> None:
         "platforms": platforms,
     }
 
-    manifest_file = f"""#!/usr/bin/env dostuff
+    return f"""#!/usr/bin/env dostuff
 
 // This is where stuff happens.
 

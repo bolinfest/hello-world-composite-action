@@ -186,7 +186,13 @@ def compute_hash(
     elif hash_algo == "sha1":
         raise NotImplementedError("sha1 is not supported")
     elif hash_algo == "sha256":
-        raise NotImplementedError("sha256 is not supported")
+        import hashlib
+
+        hasher = hashlib.sha256()
+        with open(output_filename, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest()
 
 
 def get_config(path_to_config: str) -> Any:

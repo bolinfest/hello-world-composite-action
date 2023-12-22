@@ -7,14 +7,6 @@ inputs:
   tag:
     description: 'tag identifying the release whose assets should be used'
     required: true
-
-# Should output one or more files to /github/workspace or $GITHUB_WORKSPACE
-# See https://docs.github.com/en/actions/creating-actions/creating-a-docker-container-action#accessing-files-created-by-a-container-action
-
-# outputs:
-#   random-number:
-#     description: "Random number"
-#     value: ${{ steps.random-number-generator.outputs.random-number }}
 runs:
   using: 'docker'
   image: 'Dockerfile'

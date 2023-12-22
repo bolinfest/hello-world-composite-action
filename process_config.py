@@ -45,6 +45,18 @@ def _main() -> int:
 
     logging.info(json.dumps(platform_entries, indent=2))
 
+    manifest_file = generate_manifest_file(tag, platform_entries)
+    logging.info(manifest_file)
+
+    manifest_output_file = config["output_file"]
+    output_file = os.path.join(os.environ["GITHUB_WORKSPACE"], manifest_output_file)
+    with open(output_file, "w") as f:
+        f.write(manifest_file)
+    logging.info(f"wrote manifest to {output_file}")
+    return 0
+
+
+def generate_manifest_file(tag: str, platform_entries) -> None:
     platforms = {}
     with tempfile.TemporaryDirectory() as temp_dir:
         for platform_name, platform_entry in platform_entries.items():
@@ -81,9 +93,6 @@ def _main() -> int:
 
 {json.dumps(manifest, indent=2)}
 """
-    logging.info(manifest_file)
-
-    return 0
 
 
 def map_platforms(

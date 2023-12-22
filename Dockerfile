@@ -20,7 +20,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     && apt install -y gh
 
 # Install necessary crypto algos.
-RUN pip install blake3
+RUN python3 -m pip install blake3
 
 COPY process_config.py /process_config.py
 

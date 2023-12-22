@@ -215,7 +215,7 @@ def get_release_assets(tag: str) -> Dict[str, Any]:
         "view",
         tag,
         "--repo",
-        repository,
+        github_repository,
         "--json",
         "assets",
     ]

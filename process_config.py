@@ -2,40 +2,58 @@
 
 import argparse
 import json
+import logging
 import os
+import re
 import subprocess
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()],
+)
 
 
 def main():
     args = parse_args()
-    print(f"tag: {args.tag}")
-    print(f"config: {args.config}")
+    logging.info(f"tag: {args.tag}")
+    logging.info(f"config: {args.config}")
 
     env_vars = os.environ
     for key, value in env_vars.items():
         if "GITHUB" in key:
-            print(f"{key}: {value}")
+            logging.info(f"{key}: {value}")
 
     config = get_config(args.config)
-    print(json.dumps(config, indent=2))
+    logging.info(json.dumps(config, indent=2))
 
     name_to_asset = get_release_assets(args.tag)
-    print(json.dumps(name_to_asset, indent=2))
+    logging.info(json.dumps(name_to_asset, indent=2))
 
     platform_to_asset = map_platforms_to_assets(config, name_to_asset)
+    if platform_to_asset:
+        logging.info(json.dumps(platform_to_asset, indent=2))
+    else:
+        logging.error("failed to map platforms to assets")
 
 
-def map_platforms_to_assets(config, name_to_asset: Dict[str, Any]) -> None:
+def map_platforms_to_assets(
+    config, name_to_asset: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """Note that it is possible that not all assets have been uploaded yet."""
     platforms = config.get("platforms")
     if platforms is None:
-        raise Exception("'platforms' field missing from config: {config}")
+        logging.error("'platforms' field missing from config: {config}")
+        return None
 
     platform_to_asset = {}
     for platform, value in platforms.items():
         matcher = value.get("matcher")
         if not matcher:
-            raise Exception(f"missing 'matcher' field in '{value}'")
+            logging.error(f"missing 'matcher' field in '{value}'")
+            return None
+
         name = matcher.get("name")
         if name:
             # Try to match the name exactly:
@@ -46,7 +64,8 @@ def map_platforms_to_assets(config, name_to_asset: Dict[str, Any]) -> None:
             if platform in platform_to_asset:
                 continue
             else:
-                raise Exception(f"could not find asset with name '{name}'")
+                logging.error(f"could not find asset with name '{name}'")
+                return None
 
         name_regex = matcher.get("name_regex")
         if name_regex:
@@ -59,9 +78,10 @@ def map_platforms_to_assets(config, name_to_asset: Dict[str, Any]) -> None:
             if platform in platform_to_asset:
                 continue
             else:
-                raise Exception(f"could not find asset matching regex '{name_regex}'")
+                logging.error(f"could not find asset matching regex '{name_regex}'")
+                return None
 
-    print(json.dumps(platform_to_asset, indent=2))
+    return platform_to_asset
 
 
 def get_config(path_to_config: str) -> Any:

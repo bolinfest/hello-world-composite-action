@@ -13,8 +13,8 @@ from functools import cache
 from typing import Any, Dict, Literal, Tuple, Union
 
 
-github_repository = os.getenv("GITHUB_REPOSITORY")
-github_server_url = os.getenv("GITHUB_SERVER_URL")
+github_repository = os.environ["GITHUB_REPOSITORY"]
+github_server_url = os.environ["GITHUB_SERVER_URL"]
 gh_repo_arg = f"{github_server_url}/{github_repository}"
 
 
@@ -45,14 +45,27 @@ def _main() -> int:
 
     logging.info(json.dumps(platform_entries, indent=2))
 
-    manifest_file = generate_manifest_file(tag, platform_entries)
-    logging.info(manifest_file)
+    manifest_file_contents = generate_manifest_file(tag, platform_entries)
+    logging.info(manifest_file_contents)
 
-    manifest_output_file = config["output_file"]
-    output_file = os.path.join(os.environ["GITHUB_WORKSPACE"], manifest_output_file)
-    with open(output_file, "w") as f:
-        f.write(manifest_file)
-    logging.info(f"wrote manifest to {output_file}")
+    release_filename = config.get("release_filename")
+    if release_filename:
+        output_file = os.path.join(os.environ["GITHUB_WORKSPACE"], release_filename)
+        with open(output_file, "w") as f:
+            f.write(manifest_file_contents)
+        logging.info(f"wrote manifest to {output_file}")
+
+        # Upload manifest to release, but do not clobber.
+        subprocess.run([
+            "gh",
+            "release",
+            "upload",
+            tag,
+            output_file,
+            "--repo",
+            gh_repo_arg,
+        ])
+
     return 0
 
 
@@ -205,8 +218,8 @@ def compute_hash(
 
 
 def get_config(path_to_config: str) -> Any:
-    api_url = os.getenv("GITHUB_API_URL")
-    ref = os.getenv("GITHUB_SHA")
+    api_url = os.environ["GITHUB_API_URL"]
+    ref = os.environ["GITHUB_SHA"]
 
     args = [
         "gh",
@@ -224,9 +237,6 @@ def get_config(path_to_config: str) -> Any:
 
 
 def get_release_assets(tag: str) -> Dict[str, Any]:
-    api_url = os.getenv("GITHUB_API_URL")
-    ref = os.getenv("GITHUB_SHA")
-
     args = [
         "gh",
         "release",

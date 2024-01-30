@@ -55,7 +55,8 @@ def _main() -> int:
             f.write(manifest_file_contents)
         logging.info(f"wrote manifest to {output_file}")
 
-        # Upload manifest to release, but do not clobber.
+        # Upload manifest to release, but do not clobber. Note that this may
+        # fail if this action has been called more than once for the same config.
         subprocess.run([
             "gh",
             "release",

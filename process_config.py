@@ -79,7 +79,7 @@ def _main() -> int:
         logging.info(json.dumps(platform_entries, indent=2))
 
         manifest_file_contents = generate_manifest_file(
-            gh_repo_arg, tag, platform_entries
+            output_filename, gh_repo_arg, tag, platform_entries
         )
         logging.info(manifest_file_contents)
 
@@ -106,7 +106,7 @@ def _main() -> int:
     return 0
 
 
-def generate_manifest_file(gh_repo_arg: str, tag: str, platform_entries) -> str:
+def generate_manifest_file(name: str, gh_repo_arg: str, tag: str, platform_entries) -> str:
     platforms = {}
     with tempfile.TemporaryDirectory() as temp_dir:
         for platform_name, platform_entry in platform_entries.items():
@@ -117,23 +117,50 @@ def generate_manifest_file(gh_repo_arg: str, tag: str, platform_entries) -> str:
                 logging.error(f"missing 'size' field in asset: {asset}")
                 return 1
 
-            name = asset.get("name")
-            if name is None:
+            asset_name = asset.get("name")
+            if asset_name is None:
                 logging.error(f"missing 'name' field in asset: {asset}")
                 return 1
 
-            hash_hex = compute_hash(gh_repo_arg, temp_dir, tag, name, hash_algo, size)
+            hash_hex = compute_hash(gh_repo_arg, temp_dir, tag, asset_name, hash_algo, size)
             platform_fetch_info = {
-                "url": asset["url"],
-                "digest": {"type": hash_algo, "value": hash_hex},
                 "size": size,
+                "hash": hash_algo,
+                "digest": hash_hex,
+                "providers": [
+                    {
+                        "url": asset["url"],
+                    }
+                ]
             }
+
+            # The fetch method involves a bit of guesswork.
             path = platform_config.get("path")
-            if path:
-                platform_fetch_info["path"] = path
+            if not path:
+                raise ValueError(f"no `path` specified for `{platform_name}` in `{name}`")
+
+            if asset_name.endswith(".tar.gz") or asset_name.endswith(".tgz"):
+                platform_fetch_info["extract"] = {
+                    "decompress": "tar.gz",
+                    "path": path,
+                }
+            elif asset_name.endswith(".tar"):
+                platform_fetch_info["extract"] = {
+                    "decompress": "tar",
+                    "path": path,
+                }
+            elif asset_name.endswith(".tar.zst"):
+                platform_fetch_info["extract"] = {
+                    "decompress": "tar.zst",
+                    "path": path,
+                }
+            else:
+                platform_fetch_info["filename"] = path
+
             platforms[platform_name] = platform_fetch_info
 
     manifest = {
+        "name": name,
         "platforms": platforms,
     }
 

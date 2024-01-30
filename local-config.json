@@ -1,0 +1,24 @@
+{
+  "outputs": {
+    "hermes": {
+      "platforms": {
+        "macos-x86_64": {
+          "regex": "^hermes-cli-darwin-",
+          "path": "hermes"
+        },
+        "macos-aarch64": {
+          "regex": "^hermes-cli-darwin-",
+          "path": "hermes"
+        },
+        "linux-x86_64": {
+          "regex": "^hermes-cli-linux-",
+          "path": "hermes"
+        },
+        "windows-x86_64": {
+          "regex": "^hermes-cli-windows-",
+          "path": "hermes.exe"
+        }
+      }
+    }
+  }
+}

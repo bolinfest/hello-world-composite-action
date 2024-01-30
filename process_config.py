@@ -42,47 +42,66 @@ def _main() -> int:
     api_server_url = args.api_server
     gh_repo_arg = f"{github_server_url}/{repo}"
 
-    config = get_config(
-        path_to_config=args.config,
-        config_ref=args.config_ref,
-        github_repository=repo,
-        api_url=api_server_url,
-    )
+    if args.local_config:
+        print(args.config)
+        with open(args.config, "r") as f:
+            config = json.load(f)
+    else:
+        config = get_config(
+            path_to_config=args.config,
+            config_ref=args.config_ref,
+            github_repository=repo,
+            api_url=api_server_url,
+        )
+    if not isinstance(config, dict):
+        logging.error(f"config should be a dict, but was:")
+        logging.error(json.dumps(config, indent=2))
+        return 1
+
+    outputs = config.get("outputs")
+    if not outputs:
+        logging.error("no outputs specified in config:")
+        logging.error(json.dumps(config, indent=2))
+        return 1
+
+    logging.info("using config:")
     logging.info(json.dumps(config, indent=2))
 
     name_to_asset = get_release_assets(tag=tag, github_repository=repo)
     logging.info(json.dumps(name_to_asset, indent=2))
 
-    platform_entries = map_platforms(config, name_to_asset)
-    if not isinstance(platform_entries, dict):
-        logging.error("failed with error type {platform_entries}")
-        return 1
+    for output_filename, output_config in outputs.items():
+        platform_entries = map_platforms(output_config, name_to_asset)
+        if not isinstance(platform_entries, dict):
+            logging.error(f"failed with error type {platform_entries}")
+            return 1
 
-    logging.info(json.dumps(platform_entries, indent=2))
+        logging.info(json.dumps(platform_entries, indent=2))
 
-    manifest_file_contents = generate_manifest_file(gh_repo_arg, tag, platform_entries)
-    logging.info(manifest_file_contents)
+        manifest_file_contents = generate_manifest_file(
+            gh_repo_arg, tag, platform_entries
+        )
+        logging.info(manifest_file_contents)
 
-    release_filename = config.get("release_filename")
-    if release_filename:
-        output_file = os.path.join(output_folder, release_filename)
+        output_file = os.path.join(output_folder, output_filename)
         with open(output_file, "w") as f:
             f.write(manifest_file_contents)
         logging.info(f"wrote manifest to {output_file}")
 
-        # Upload manifest to release, but do not clobber. Note that this may
-        # fail if this action has been called more than once for the same config.
-        subprocess.run(
-            [
-                "gh",
-                "release",
-                "upload",
-                tag,
-                output_file,
-                "--repo",
-                gh_repo_arg,
-            ]
-        )
+        if args.upload:
+            # Upload manifest to release, but do not clobber. Note that this may
+            # fail if this action has been called more than once for the same config.
+            subprocess.run(
+                [
+                    "gh",
+                    "release",
+                    "upload",
+                    tag,
+                    output_file,
+                    "--repo",
+                    gh_repo_arg,
+                ]
+            )
 
     return 0
 
@@ -128,7 +147,10 @@ def generate_manifest_file(gh_repo_arg: str, tag: str, platform_entries) -> str:
 
 def map_platforms(
     config, name_to_asset: Dict[str, Any]
-) -> Union[Dict[str, Tuple[Any, Any]], Literal["NoMatchForAsset", "ParseError"]]:
+) -> Union[
+    Dict[str, Tuple[Any, Any]],
+    Literal["BothNameAndRegex", "NeitherNameNorRegex", "NoMatchForAsset", "ParseError"],
+]:
     """Attempts to take every platform specified in the config and return a map
     of platform names to their corresponding asset information. If successful,
     each value in the dict will be a tuple of (asset, platform_config).
@@ -143,12 +165,19 @@ def map_platforms(
 
     platform_entries = {}
     for platform, platform_config in platforms.items():
-        matcher = platform_config.get("matcher")
-        if not matcher:
-            logging.error(f"missing 'matcher' field in '{platform_config}'")
-            return "ParseError"
+        name = platform_config.get("name")
+        name_regex = platform_config.get("regex")
+        if name and name_regex:
+            logging.error(
+                f"only one of 'name' and 'regex' should be specified for {platform}"
+            )
+            return "BothNameAndRegex"
+        elif not name and not name_regex:
+            logging.error(
+                f"exactly one of 'name' and 'regex' should be specified for {platform}"
+            )
+            return "NeitherNameNorRegex"
 
-        name = matcher.get("name")
         if name:
             # Try to match the name exactly:
             for asset_name, asset in name_to_asset.items():
@@ -160,9 +189,7 @@ def map_platforms(
             else:
                 logging.error(f"could not find asset with name '{name}'")
                 return "NoMatchForAsset"
-
-        name_regex = matcher.get("name_regex")
-        if name_regex:
+        else:
             # Try to match the name using a regular expression.
             regex = re.compile(name_regex)
             for asset_name, asset in name_to_asset.items():
@@ -279,9 +306,19 @@ def parse_args():
     parser.add_argument("--tag", required=True, help="tag identifying the release")
     parser.add_argument("--config", required=True, help="path to JSON config file")
     parser.add_argument(
+        "--local-config",
+        action="store_true",
+        help="if specified, --config is treated as a local path and --config-ref is ignored",
+    )
+    parser.add_argument(
         "--repo",
         help="github repo specified in `ORG/REPO` format",
         default=os.getenv("GITHUB_REPOSITORY"),
+    )
+    parser.add_argument(
+        "--upload",
+        action="store_true",
+        help="if specified, upload the generated DotSlash files to the release",
     )
 
     # It would make things slightly easier for the user to default to the

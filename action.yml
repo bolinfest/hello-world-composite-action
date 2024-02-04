@@ -1,7 +1,7 @@
 name: 'Release Manifest'
 description: 'Create release manifest once all artifacts are available in the release'
 inputs:
-  path-to-config:
+  config:
     description: 'path to .json file in the repo'
     required: true
   tag:
@@ -12,6 +12,6 @@ runs:
   image: 'Dockerfile'
   args:
     - '--config'
-    - ${{ inputs.path-to-config }}
+    - ${{ inputs.config }}
     - '--tag'
     - ${{ inputs.tag }}

@@ -10,7 +10,11 @@ import sys
 import tempfile
 
 from functools import cache
-from typing import Any, Dict, Literal, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
+
+
+HashAlgorithm = Literal["blake3", "sha256"]
+ArtifactFormat = Literal["gz", "tar", "tar.gz", "tar.zst", "zst"]
 
 
 def main() -> None:
@@ -106,7 +110,9 @@ def _main() -> int:
     return 0
 
 
-def generate_manifest_file(name: str, gh_repo_arg: str, tag: str, platform_entries) -> str:
+def generate_manifest_file(
+    name: str, gh_repo_arg: str, tag: str, platform_entries
+) -> str:
     platforms = {}
     with tempfile.TemporaryDirectory() as temp_dir:
         for platform_name, platform_entry in platform_entries.items():
@@ -122,51 +128,53 @@ def generate_manifest_file(name: str, gh_repo_arg: str, tag: str, platform_entri
                 logging.error(f"missing 'name' field in asset: {asset}")
                 return 1
 
-            hash_hex = compute_hash(gh_repo_arg, temp_dir, tag, asset_name, hash_algo, size)
-            platform_fetch_info = {
+            path = platform_config.get("path")
+            if not path:
+                logging.error(f"missing `path` field in asset: {asset}")
+                return 1
+
+            if "format" in platform_config:
+                # If the user is knowingly not using any sort of compression,
+                # then `"format": null` must be explicitly specified in the JSON.
+                asset_format = platform_config["format"]
+            else:
+                asset_format = guess_artifact_format_from_asset_name(asset_name)
+                if not asset_format:
+                    logging.error(
+                        f'"format" could not be inferred from asset name: {asset_name} in {asset}, must specify explicitly'
+                    )
+                    return 1
+
+            hash_hex = compute_hash(
+                gh_repo_arg, temp_dir, tag, asset_name, hash_algo, size
+            )
+
+            artifact_entry = {
                 "size": size,
                 "hash": hash_algo,
                 "digest": hash_hex,
+                "format": asset_format,
+                "path": path,
                 "providers": [
                     {
                         "url": asset["url"],
                     }
-                ]
+                ],
             }
 
-            # The fetch method involves a bit of guesswork.
-            path = platform_config.get("path")
-            if not path:
-                raise ValueError(f"no `path` specified for `{platform_name}` in `{name}`")
+            # If `"format": null` was specified, there should not be a "format"
+            # field in the arifact entry.
+            if not asset_format:
+                artifact_entry["format"] = asset_format
 
-            if asset_name.endswith(".tar.gz") or asset_name.endswith(".tgz"):
-                platform_fetch_info["extract"] = {
-                    "decompress": "tar.gz",
-                    "path": path,
-                }
-            elif asset_name.endswith(".tar"):
-                platform_fetch_info["extract"] = {
-                    "decompress": "tar",
-                    "path": path,
-                }
-            elif asset_name.endswith(".tar.zst"):
-                platform_fetch_info["extract"] = {
-                    "decompress": "tar.zst",
-                    "path": path,
-                }
-            else:
-                platform_fetch_info["filename"] = path
-
-            platforms[platform_name] = platform_fetch_info
+            platforms[platform_name] = artifact_entry
 
     manifest = {
         "name": name,
         "platforms": platforms,
     }
 
-    return f"""#!/usr/bin/env dostuff
-
-// This is where stuff happens.
+    return f"""#!/usr/bin/env dotslash
 
 {json.dumps(manifest, indent=2)}
 """
@@ -238,7 +246,7 @@ def compute_hash(
     temp_dir: str,
     tag: str,
     name: str,
-    hash_algo: Literal["blake3", "sha1", "sha256"],
+    hash_algo: HashAlgorithm,
     size: int,
 ) -> str:
     """Fetches the release entry corresponding to the specified (tag, name) tuple,
@@ -278,8 +286,6 @@ def compute_hash(
                 hasher.update(chunk)
         digest = hasher.digest()
         return digest.hex()
-    elif hash_algo == "sha1":
-        raise NotImplementedError("sha1 is not supported")
     elif hash_algo == "sha256":
         import hashlib
 
@@ -325,6 +331,21 @@ def get_release_assets(*, tag: str, github_repository) -> Dict[str, Any]:
     if not assets:
         raise Exception(f"no assets found for release '{tag}'")
     return {asset["name"]: asset for asset in assets if asset["state"] == "uploaded"}
+
+
+def guess_artifact_format_from_asset_name(asset_name: str) -> Optional[ArtifactFormat]:
+    if asset_name.endswith(".tar.gz") or asset_name.endswith(".tgz"):
+        return "tar.gz"
+    if asset_name.endswith(".tar.zst") or asset_name.endswith(".tzst"):
+        return "tar.zst"
+    elif asset_name.endswith(".tar"):
+        return "tar"
+    elif asset_name.endswith(".gz"):
+        return "gz"
+    elif asset_name.endswith(".zst"):
+        return "zst"
+    else:
+        return None
 
 
 def parse_args():
@@ -380,4 +401,5 @@ def parse_args():
     return parser.parse_args()
 
 
-main()
+if __name__ == "__main__":
+    main()

@@ -206,7 +206,7 @@ def generate_manifest_file(
             # If `"format": null` was specified, there should not be a "format"
             # field in the arifact entry.
             if not asset_format:
-                artifact_entry["format"] = asset_format
+                del artifact_entry["format"]
 
             platforms[platform_name] = artifact_entry
 

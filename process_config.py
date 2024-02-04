@@ -16,6 +16,11 @@ from typing import Any, Dict, Literal, Optional, Tuple, Union
 HashAlgorithm = Literal["blake3", "sha256"]
 ArtifactFormat = Literal["gz", "tar", "tar.gz", "tar.zst", "zst"]
 
+# Recognized properties in the JSON config.
+OUTPUTS_PARAM = "outputs"
+EXCLUDE_HTTP_PROVIDER_PARAM = "exclude-http-provider"
+EXCLUDE_GITHUB_PROVIDER_PARAM = "exclude-github-release-provider"
+
 
 def main() -> None:
     exit_code = _main()
@@ -62,10 +67,23 @@ def _main() -> int:
         logging.error(json.dumps(config, indent=2))
         return 1
 
-    outputs = config.get("outputs")
+    outputs = config.get(OUTPUTS_PARAM)
     if not outputs:
-        logging.error("no outputs specified in config:")
+        logging.error(f"no {OUTPUTS_PARAM} specified in config:")
         logging.error(json.dumps(config, indent=2))
+        return 1
+
+    exclude_http_provider = config.get(EXCLUDE_HTTP_PROVIDER_PARAM, False)
+    if not isinstance(exclude_http_provider, bool):
+        logging.error(
+            f'"{EXCLUDE_HTTP_PROVIDER_PARAM}" field must be a boolean, but was `{exclude_http_provider}`'
+        )
+        return 1
+    exclude_github_release_provider = config.get(EXCLUDE_GITHUB_PROVIDER_PARAM, False)
+    if not isinstance(exclude_github_release_provider, bool):
+        logging.error(
+            f'"{EXCLUDE_GITHUB_PROVIDER_PARAM}" field must be a boolean, but was `{exclude_github_release_provider}`'
+        )
         return 1
 
     logging.info("using config:")
@@ -83,7 +101,12 @@ def _main() -> int:
         logging.info(json.dumps(platform_entries, indent=2))
 
         manifest_file_contents = generate_manifest_file(
-            output_filename, gh_repo_arg, tag, platform_entries
+            output_filename,
+            gh_repo_arg,
+            tag,
+            platform_entries,
+            include_http_provider=not exclude_http_provider,
+            include_github_release_provider=not exclude_github_release_provider,
         )
         logging.info(manifest_file_contents)
 
@@ -111,7 +134,12 @@ def _main() -> int:
 
 
 def generate_manifest_file(
-    name: str, gh_repo_arg: str, tag: str, platform_entries
+    name: str,
+    gh_repo_arg: str,
+    tag: str,
+    platform_entries,
+    include_http_provider: bool,
+    include_github_release_provider: bool,
 ) -> str:
     platforms = {}
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -149,17 +177,30 @@ def generate_manifest_file(
                 gh_repo_arg, temp_dir, tag, asset_name, hash_algo, size
             )
 
+            providers = []
+            if include_http_provider:
+                providers.append(
+                    {
+                        "url": asset["url"],
+                    }
+                )
+            if include_github_release_provider:
+                providers.append(
+                    {
+                        "type": "github-release",
+                        "repo": gh_repo_arg,
+                        "tag": tag,
+                        "name": asset_name,
+                    }
+                )
+
             artifact_entry = {
                 "size": size,
                 "hash": hash_algo,
                 "digest": hash_hex,
                 "format": asset_format,
                 "path": path,
-                "providers": [
-                    {
-                        "url": asset["url"],
-                    }
-                ],
+                "providers": providers,
             }
 
             # If `"format": null` was specified, there should not be a "format"
@@ -349,7 +390,9 @@ def guess_artifact_format_from_asset_name(asset_name: str) -> Optional[ArtifactF
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="A simple argparse example")
+    parser = argparse.ArgumentParser(
+        description="Generate DotSlash files for a GitHub release"
+    )
 
     parser.add_argument("--tag", required=True, help="tag identifying the release")
     parser.add_argument("--config", required=True, help="path to JSON config file")
